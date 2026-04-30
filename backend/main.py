@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
 
     # Configurar webhook na Uazapi ao iniciar
-    if settings.uazapi_base_url and settings.uazapi_admin_token and settings.webhook_public_url:
+    if settings.uazapi_base_url and settings.uazapi_token and settings.webhook_public_url:
         from services.uazapi import configure_webhook
         logger.info("🔗 Configurando webhook na Uazapi...")
         configure_webhook()

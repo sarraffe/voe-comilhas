@@ -46,7 +46,7 @@ def send_text_message(phone: str, message: str) -> bool:
         return False
 
     normalized = normalize_phone(phone)
-    url = f"{settings.uazapi_base_url}/message/text"
+    url = f"{settings.uazapi_base_url}/send/text"
 
     headers = {
         "token": settings.uazapi_token,
@@ -54,7 +54,7 @@ def send_text_message(phone: str, message: str) -> bool:
     }
 
     payload = {
-        "to": normalized,
+        "number": normalized,
         "text": message,
     }
 
@@ -81,22 +81,21 @@ def configure_webhook() -> bool:
     Configura o webhook na Uazapi apontando para o endpoint da aplicação.
     Endpoint destino: {WEBHOOK_PUBLIC_URL}/webhook/uazapi
     """
-    if not settings.uazapi_base_url or not settings.uazapi_admin_token:
-        logger.error("[Uazapi] UAZAPI_BASE_URL ou UAZAPI_ADMIN_TOKEN não configurados.")
+    if not settings.uazapi_base_url or not settings.uazapi_token:
+        logger.error("[Uazapi] UAZAPI_BASE_URL ou UAZAPI_TOKEN não configurados.")
         return False
 
     webhook_url = f"{settings.webhook_public_url}/webhook/uazapi"
-    url = f"{settings.uazapi_base_url}/instance/webhook"
+    url = f"{settings.uazapi_base_url}/webhook"
 
     headers = {
-        "token": settings.uazapi_admin_token,
+        "token": settings.uazapi_token,
         "Content-Type": "application/json",
     }
 
     payload = {
-        "instanceId": settings.uazapi_instance_id,
-        "webhook": webhook_url,
-        "webhookEnabled": True,
+        "url": webhook_url,
+        "enabled": True,
     }
 
     try:
@@ -131,8 +130,8 @@ def parse_incoming_message(payload: dict) -> Optional[dict]:
     Retorna None se a mensagem não deve ser processada.
     """
     try:
-        # Estrutura típica da Uazapi
-        # O payload pode variar dependendo da versão da Uazapi
+        # Estrutura da Uazapi: o payload pode vir diretamente ou dentro de "data"
+        # Ex: {"event": "message", "data": {...}} ou direto o objeto da mensagem
         event = payload.get("event") or payload.get("type") or ""
         data = payload.get("data") or payload
 
@@ -141,43 +140,47 @@ def parse_incoming_message(payload: dict) -> Optional[dict]:
             logger.debug(f"[Uazapi] Evento ignorado: {event}")
             return None
 
-        # Suporte a diferentes estruturas de payload da Uazapi
+        # Suporte a diferentes estruturas de payload
         message = data.get("message") or data
 
-        # Verificar se é mensagem própria
-        from_me = (
-            message.get("fromMe")
-            or message.get("from_me")
+        # Verificar se é mensagem própria (fromMe em vários níveis)
+        from_me = bool(
+            payload.get("fromMe")
             or data.get("fromMe")
-            or False
+            or message.get("fromMe")
+            or message.get("from_me")
         )
         if from_me:
             logger.debug("[Uazapi] Mensagem própria ignorada.")
             return None
 
-        # Verificar se é grupo
-        remote_jid = (
-            message.get("remoteJid")
-            or message.get("remote_jid")
-            or data.get("remoteJid")
+        # Verificar se é grupo (chatid ou remoteJid terminando com @g.us)
+        chat_id = (
+            payload.get("chatid")
+            or data.get("chatid")
             or data.get("chatId")
+            or message.get("remoteJid")
+            or message.get("remote_jid")
             or ""
         )
-        is_group = "@g.us" in str(remote_jid)
+        is_group = "@g.us" in str(chat_id)
         if is_group:
             logger.debug("[Uazapi] Mensagem de grupo ignorada.")
             return None
 
         # Extrair número do remetente
+        # Uazapi envia no campo "number", "sender" ou "chatid" (sem @s.whatsapp.net)
         phone = (
-            message.get("from")
-            or message.get("sender")
-            or data.get("from")
+            payload.get("number")
+            or data.get("number")
+            or message.get("number")
+            or payload.get("sender")
             or data.get("sender")
-            or remote_jid
+            or message.get("sender")
+            or chat_id
             or ""
         )
-        # Remover sufixos do WhatsApp (@s.whatsapp.net, @c.us)
+        # Remover sufixos do WhatsApp (@s.whatsapp.net, @c.us, @s.us)
         phone = re.sub(r"@.*", "", str(phone))
         phone = re.sub(r"\D", "", phone)
 
@@ -187,7 +190,9 @@ def parse_incoming_message(payload: dict) -> Optional[dict]:
 
         # Extrair nome do contato
         name = (
-            data.get("pushName")
+            payload.get("senderName")
+            or data.get("senderName")
+            or data.get("pushName")
             or data.get("notifyName")
             or message.get("pushName")
             or message.get("notifyName")
@@ -196,12 +201,13 @@ def parse_incoming_message(payload: dict) -> Optional[dict]:
 
         # Extrair texto da mensagem
         text = (
-            message.get("text")
+            payload.get("text")
+            or data.get("text")
+            or data.get("body")
+            or message.get("text")
             or message.get("body")
             or message.get("conversation")
             or (message.get("extendedTextMessage") or {}).get("text")
-            or data.get("text")
-            or data.get("body")
             or ""
         )
 
@@ -211,19 +217,25 @@ def parse_incoming_message(payload: dict) -> Optional[dict]:
 
         # Extrair metadados
         message_id = (
-            message.get("id")
+            payload.get("messageid")
+            or payload.get("id")
+            or data.get("messageid")
             or data.get("id")
+            or message.get("id")
             or ""
         )
         timestamp = (
-            message.get("timestamp")
-            or message.get("messageTimestamp")
+            payload.get("messageTimestamp")
+            or data.get("messageTimestamp")
             or data.get("timestamp")
+            or message.get("messageTimestamp")
+            or message.get("timestamp")
             or None
         )
         message_type = (
-            message.get("type")
-            or data.get("type")
+            payload.get("messageType")
+            or data.get("messageType")
+            or message.get("type")
             or "text"
         )
 
