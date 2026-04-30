@@ -77,11 +77,22 @@ export default function CotacaoDetalhe() {
     }
   }
 
+  // Converte DD/MM/AAAA → AAAA-MM-DD para o backend
+  function parseDateBR(str) {
+    if (!str) return ''
+    if (str.includes('/')) {
+      const [d, m, y] = str.split('/')
+      return `${y}-${m}-${d}`
+    }
+    return str
+  }
+
   const handleSaveOpcao = async () => {
     try {
       setSaving(true)
       const payload = { ...novaOpcao }
       if (payload.valor_total) payload.valor_total = parseFloat(payload.valor_total)
+      if (payload.data_voo) payload.data_voo = parseDateBR(payload.data_voo)
       await axios.post(`${API_URL}/cotacoes/${id}/opcoes`, payload)
       setNovaOpcao(EMPTY_OPCAO)
       setShowNovaOpcao(false)
@@ -242,7 +253,7 @@ export default function CotacaoDetalhe() {
                     { key: 'companhia', label: 'Companhia Aérea', type: 'text' },
                     { key: 'origem', label: 'Origem (sigla)', type: 'text' },
                     { key: 'destino', label: 'Destino (sigla)', type: 'text' },
-                    { key: 'data_voo', label: 'Data do Voo', type: 'date' },
+                    { key: 'data_voo', label: 'Data do Voo', type: 'text', placeholder: 'DD/MM/AAAA' },
                     { key: 'horario_saida', label: 'Horário de Saída', type: 'text', placeholder: 'ex: 08:30' },
                     { key: 'horario_chegada', label: 'Horário de Chegada', type: 'text', placeholder: 'ex: 11:45' },
                     { key: 'paradas', label: 'Paradas/Conexões', type: 'text', placeholder: 'ex: 1 escala em BSB' },
