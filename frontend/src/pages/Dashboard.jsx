@@ -28,6 +28,28 @@ export default function Dashboard() {
     }
   }, [filterStatus])
 
+  const handleDelete = useCallback(async (id) => {
+    try {
+      await axios.delete(`${API_URL}/cotacoes/${id}`)
+      setCotacoes(prev => prev.filter(c => c.id !== id))
+    } catch (err) {
+      console.error('Erro ao excluir cotação:', err)
+      alert('Não foi possível excluir a cotação. Tente novamente.')
+    }
+  }, [])
+
+  const handleStatusChange = useCallback(async (id, newStatus) => {
+    // Otimista: atualiza imediatamente na UI
+    setCotacoes(prev => prev.map(c => c.id === id ? { ...c, status: newStatus } : c))
+    try {
+      await axios.patch(`${API_URL}/cotacoes/${id}/status`, { status: newStatus })
+    } catch (err) {
+      console.error('Erro ao atualizar status:', err)
+      // Reverter em caso de erro
+      fetchCotacoes()
+    }
+  }, [fetchCotacoes])
+
   useEffect(() => {
     fetchCotacoes()
     // Auto-refresh a cada 30 segundos
@@ -137,7 +159,12 @@ export default function Dashboard() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(cotacao => (
-            <CotacaoCard key={cotacao.id} cotacao={cotacao} />
+            <CotacaoCard
+              key={cotacao.id}
+              cotacao={cotacao}
+              onDelete={handleDelete}
+              onStatusChange={handleStatusChange}
+            />
           ))}
         </div>
       )}

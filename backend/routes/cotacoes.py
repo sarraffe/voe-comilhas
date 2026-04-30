@@ -127,6 +127,18 @@ def gerar_proposta(cotacao_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.delete("/{cotacao_id}")
+def delete_cotacao(cotacao_id: str):
+    """Exclui uma cotação e seus registros relacionados."""
+    cotacao = db.get_cotacao_by_id(cotacao_id)
+    if not cotacao:
+        raise HTTPException(status_code=404, detail="Cotação não encontrada.")
+    success = db.delete_cotacao(cotacao_id)
+    if not success:
+        raise HTTPException(status_code=500, detail="Erro ao excluir cotação.")
+    return {"ok": True, "message": "Cotação excluída com sucesso."}
+
+
 @router.get("/{cotacao_id}/mensagens")
 def get_mensagens(
     cotacao_id: str,

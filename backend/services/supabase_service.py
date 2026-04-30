@@ -67,11 +67,11 @@ def get_cotacao_aberta(cliente_id: str) -> Optional[dict]:
 
 
 def create_cotacao(cliente_id: str) -> dict:
-    """Cria nova cotação com status dados_incompletos."""
+    """Cria nova cotação com status novo."""
     supabase = get_supabase()
     data = {
         "cliente_id": cliente_id,
-        "status": "dados_incompletos",
+        "status": "novo",
         "adultos": 1,
         "criancas": 0,
         "bebes": 0,
@@ -81,6 +81,23 @@ def create_cotacao(cliente_id: str) -> dict:
     res = supabase.table("cotacoes").insert(data).execute()
     logger.info(f"[Supabase] Cotação criada para cliente {cliente_id}")
     return res.data[0]
+
+
+def delete_cotacao(cotacao_id: str) -> bool:
+    """Exclui uma cotação e seus registros relacionados."""
+    supabase = get_supabase()
+    try:
+        # Excluir mensagens relacionadas
+        supabase.table("mensagens").delete().eq("cotacao_id", cotacao_id).execute()
+        # Excluir opções de voo relacionadas
+        supabase.table("opcoes_voo").delete().eq("cotacao_id", cotacao_id).execute()
+        # Excluir a cotação
+        supabase.table("cotacoes").delete().eq("id", cotacao_id).execute()
+        logger.info(f"[Supabase] Cotação {cotacao_id} excluída com sucesso")
+        return True
+    except Exception as e:
+        logger.error(f"[Supabase] Erro ao excluir cotação {cotacao_id}: {e}")
+        return False
 
 
 def update_cotacao(cotacao_id: str, data: dict) -> dict:
