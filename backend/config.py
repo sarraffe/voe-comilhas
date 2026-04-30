@@ -13,7 +13,7 @@ class Settings(BaseSettings):
 
     # OpenAI
     openai_api_key: str = ""
-    openai_model: str = "gpt-4.1-mini"
+    openai_model: str = "gpt-4.5-preview"
 
     # Uazapi
     uazapi_base_url: str = ""
