@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import axios from 'axios'
 import PropostaOption from '../components/PropostaOption'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_URL = import.meta.env.VITE_API_URL || 'https://voe-comilhas-production.up.railway.app'
 
 function formatDate(d) {
   if (!d) return '—'

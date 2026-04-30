@@ -4,7 +4,7 @@ import axios from 'axios'
 import Layout from '../components/Layout'
 import StatusBadge, { STATUS_CONFIG } from '../components/StatusBadge'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_URL = import.meta.env.VITE_API_URL || 'https://voe-comilhas-production.up.railway.app'
 
 function InfoField({ label, value }) {
   return (

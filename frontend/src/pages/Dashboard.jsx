@@ -4,7 +4,7 @@ import Layout from '../components/Layout'
 import CotacaoCard from '../components/CotacaoCard'
 import StatusBadge, { STATUS_CONFIG } from '../components/StatusBadge'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_URL = import.meta.env.VITE_API_URL || 'https://voe-comilhas-production.up.railway.app'
 
 export default function Dashboard() {
   const [cotacoes, setCotacoes] = useState([])
