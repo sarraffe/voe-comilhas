@@ -56,8 +56,13 @@ app = FastAPI(
 )
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-# Em produção, FRONTEND_URL deve apontar para a URL do Netlify
-allowed_origins = ["http://localhost:5173", "http://localhost:3000"]
+# Origens sempre permitidas (dev + produção Netlify)
+allowed_origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://voe-comilhas.netlify.app",
+]
+# Adiciona FRONTEND_URL do env se vier diferente das acima
 if settings.frontend_url and settings.frontend_url not in allowed_origins:
     allowed_origins.append(settings.frontend_url)
 
