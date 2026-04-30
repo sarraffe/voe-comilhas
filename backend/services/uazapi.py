@@ -130,114 +130,85 @@ def parse_incoming_message(payload: dict) -> Optional[dict]:
     Retorna None se a mensagem não deve ser processada.
     """
     try:
-        # Estrutura da Uazapi: o payload pode vir diretamente ou dentro de "data"
-        # Ex: {"event": "message", "data": {...}} ou direto o objeto da mensagem
-        event = payload.get("event") or payload.get("type") or ""
-        data = payload.get("data") or payload
+        # Estrutura real da Uazapi vcmviagens:
+        # {
+        #   "EventType": "messages",
+        #   "owner": "559282302000",
+        #   "message": {
+        #     "chatid": "559281120001@s.whatsapp.net",  ← número real do cliente
+        #     "sender": "228767809151116@lid",           ← lid interno, NÃO usar
+        #     "fromMe": false,
+        #     "isGroup": false,
+        #     "text": "...",
+        #     "type": "text"
+        #   },
+        #   "chat": { "wa_chatid": "559281120001@s.whatsapp.net", ... }
+        # }
+
+        event_type = payload.get("EventType") or payload.get("event") or payload.get("type") or ""
 
         # Ignorar eventos que não sejam de mensagem
-        if event and "message" not in event.lower():
-            logger.debug(f"[Uazapi] Evento ignorado: {event}")
+        if event_type and event_type.lower() not in ("messages", "message", ""):
+            logger.debug(f"[Uazapi] Evento ignorado: {event_type}")
             return None
 
-        # Suporte a diferentes estruturas de payload
-        message = data.get("message") or data
+        # O objeto da mensagem está em payload["message"]
+        message = payload.get("message") or {}
+        chat_obj = payload.get("chat") or {}
 
-        # Verificar se é mensagem própria (fromMe em vários níveis)
-        from_me = bool(
-            payload.get("fromMe")
-            or data.get("fromMe")
-            or message.get("fromMe")
-            or message.get("from_me")
-        )
+        # Se não há message nem data, ignorar
+        if not message and not payload.get("data"):
+            logger.debug("[Uazapi] Payload sem campo 'message', ignorado.")
+            return None
+
+        # Verificar se é mensagem própria
+        from_me = bool(message.get("fromMe") or message.get("from_me"))
         if from_me:
             logger.debug("[Uazapi] Mensagem própria ignorada.")
             return None
 
-        # Verificar se é grupo (chatid ou remoteJid terminando com @g.us)
-        chat_id = (
-            payload.get("chatid")
-            or data.get("chatid")
-            or data.get("chatId")
-            or message.get("remoteJid")
-            or message.get("remote_jid")
-            or ""
-        )
-        is_group = "@g.us" in str(chat_id)
+        # Verificar se é grupo
+        is_group = bool(message.get("isGroup") or message.get("is_group"))
+        # Também verificar pelo chatid
+        msg_chatid = message.get("chatid") or message.get("chatId") or ""
+        if not is_group:
+            is_group = "@g.us" in str(msg_chatid)
         if is_group:
             logger.debug("[Uazapi] Mensagem de grupo ignorada.")
             return None
 
-        # Extrair número do remetente
-        # Uazapi envia no campo "number", "sender" ou "chatid" (sem @s.whatsapp.net)
-        phone = (
-            payload.get("number")
-            or data.get("number")
-            or message.get("number")
-            or payload.get("sender")
-            or data.get("sender")
-            or message.get("sender")
-            or chat_id
+        # Extrair número do remetente pelo chatid da mensagem (NÃO usar sender/lid)
+        # chatid = "559281120001@s.whatsapp.net" → phone = "559281120001"
+        phone_raw = (
+            msg_chatid
+            or chat_obj.get("wa_chatid")
             or ""
         )
-        # Remover sufixos do WhatsApp (@s.whatsapp.net, @c.us, @s.us)
-        phone = re.sub(r"@.*", "", str(phone))
+        phone = re.sub(r"@.*", "", str(phone_raw))
         phone = re.sub(r"\D", "", phone)
 
         if not phone:
             logger.warning("[Uazapi] Número do remetente não encontrado no payload.")
             return None
 
-        # Extrair nome do contato
-        name = (
-            payload.get("senderName")
-            or data.get("senderName")
-            or data.get("pushName")
-            or data.get("notifyName")
-            or message.get("pushName")
-            or message.get("notifyName")
-            or None
-        )
+        # Extrair nome do contato (via pushName ou chat)
+        wa_name = chat_obj.get("wa_name") or chat_obj.get("lead_name") or ""
+        name = wa_name if wa_name and wa_name not in ("~", "") else None
 
         # Extrair texto da mensagem
-        text = (
-            payload.get("text")
-            or data.get("text")
-            or data.get("body")
-            or message.get("text")
-            or message.get("body")
-            or message.get("conversation")
-            or (message.get("extendedTextMessage") or {}).get("text")
-            or ""
-        )
+        raw_text = message.get("text") or message.get("content") or message.get("body") or ""
+        if isinstance(raw_text, dict):
+            raw_text = raw_text.get("text") or ""
+        text = str(raw_text).strip()
 
         if not text:
             logger.debug("[Uazapi] Mensagem sem texto (mídia ou outro tipo) ignorada.")
             return None
 
         # Extrair metadados
-        message_id = (
-            payload.get("messageid")
-            or payload.get("id")
-            or data.get("messageid")
-            or data.get("id")
-            or message.get("id")
-            or ""
-        )
-        timestamp = (
-            payload.get("messageTimestamp")
-            or data.get("messageTimestamp")
-            or data.get("timestamp")
-            or message.get("messageTimestamp")
-            or message.get("timestamp")
-            or None
-        )
-        message_type = (
-            payload.get("messageType")
-            or data.get("messageType")
-            or message.get("type")
-            or "text"
-        )
+        message_id = message.get("id") or ""
+        timestamp = message.get("timestamp") or message.get("messageTimestamp") or None
+        message_type = message.get("type") or "text"
 
         return {
             "phone": phone,
