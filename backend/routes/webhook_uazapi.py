@@ -78,7 +78,13 @@ async def _processar_mensagem(payload: dict):
     except Exception as e:
         logger.error(f"[Webhook] Erro ao salvar mensagem: {e}")
 
-    # 6. Buscar histórico recente de mensagens (excluindo a que acabamos de salvar)
+    # 6. Se a cotação já está em "proposta_enviada", o atendente humano assume.
+    #    Apenas salvar a mensagem e encerrar o follow-up automático (não rodar agente).
+    if cotacao.get("status") == "proposta_enviada":
+        logger.info(f"[Webhook] Cotação {cotacao_id} em proposta_enviada — atendente humano assume, agente não responde.")
+        return
+
+    # 7. Buscar histórico recente de mensagens (excluindo a que acabamos de salvar)
     try:
         historico = db.get_recent_messages(cliente_id, cotacao_id, limit=12)
         # Remover a última mensagem (a que acabamos de salvar) para evitar duplicação
@@ -88,7 +94,7 @@ async def _processar_mensagem(payload: dict):
         logger.warning(f"[Webhook] Erro ao buscar histórico: {e}")
         historico = []
 
-    # 7. Processar com OpenAI
+    # 8. Processar com OpenAI
     try:
         resultado = agente_openai.processar_mensagem_cliente(
             mensagem_cliente=text,
@@ -97,42 +103,39 @@ async def _processar_mensagem(payload: dict):
         )
     except Exception as e:
         logger.error(f"[Webhook] Erro ao processar com OpenAI: {e}")
-        # Enviar mensagem de erro genérica
         uazapi.send_text_message(phone, "Desculpe, ocorreu um erro interno. Tente novamente em instantes.")
         return
 
-    # 8. Atualizar cotação com dados extraídos
+    # 9. Atualizar cotação com dados extraídos
     try:
         dados_extraidos = resultado.get("dados_extraidos", {})
         novo_status = resultado.get("status_cotacao", "dados_incompletos")
 
-        # Montar update apenas com campos não-nulos
         update_data = {k: v for k, v in dados_extraidos.items() if v is not None}
         update_data["status"] = novo_status
 
         if update_data:
             db.update_cotacao(cotacao_id, update_data)
 
-        # Se dados completos, garantir status "novo"
         if resultado.get("dados_completos") and novo_status == "dados_incompletos":
             db.update_status(cotacao_id, "novo")
 
     except Exception as e:
         logger.error(f"[Webhook] Erro ao atualizar cotação {cotacao_id}: {e}")
 
-    # 9. Obter resposta do agente
+    # 10. Obter resposta do agente
     resposta_agente = resultado.get("resposta_cliente", "")
     if not resposta_agente:
         logger.warning("[Webhook] Agente não retornou resposta para o cliente.")
         return
 
-    # 10. Salvar resposta do agente
+    # 11. Salvar resposta do agente
     try:
         db.save_message(cliente_id, cotacao_id, "agente", resposta_agente)
     except Exception as e:
         logger.error(f"[Webhook] Erro ao salvar resposta do agente: {e}")
 
-    # 11. Enviar resposta para o cliente via Uazapi
+    # 12. Enviar resposta para o cliente via Uazapi
     sucesso = uazapi.send_text_message(phone, resposta_agente)
     if sucesso:
         logger.info(f"[Webhook] Resposta enviada para {phone} ✓")

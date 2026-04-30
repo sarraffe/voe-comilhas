@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from apscheduler.schedulers.background import BackgroundScheduler
 
 from config import settings
 from routes import webhook_uazapi, cotacoes, clientes, propostas
@@ -42,8 +43,22 @@ async def lifespan(app: FastAPI):
     else:
         logger.warning("⚠️  Variáveis Uazapi não configuradas — webhook não configurado.")
 
+    # Iniciar scheduler de follow-up automático
+    from services.followup import executar_followups
+    scheduler = BackgroundScheduler(timezone="America/Manaus")
+    scheduler.add_job(
+        executar_followups,
+        trigger="interval",
+        minutes=30,
+        id="followup_job",
+        replace_existing=True,
+    )
+    scheduler.start()
+    logger.info("⏰ Scheduler de follow-up iniciado (intervalo: 30 min)")
+
     yield
 
+    scheduler.shutdown(wait=False)
     logger.info("🛬 Aplicação encerrada.")
 
 

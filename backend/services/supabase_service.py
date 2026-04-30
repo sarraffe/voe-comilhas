@@ -212,6 +212,62 @@ def get_proposta_by_codigo(codigo: str) -> Optional[dict]:
         return None
 
 
+# ── FOLLOW-UP ─────────────────────────────────────────────────────────────────
+
+def get_cotacoes_proposta_enviada() -> List[dict]:
+    """Retorna cotações com status proposta_enviada (candidatas a follow-up)."""
+    supabase = get_supabase()
+    try:
+        res = supabase.table("cotacoes").select(
+            "*, clientes(id, nome, whatsapp)"
+        ).eq("status", "proposta_enviada").execute()
+        return res.data or []
+    except Exception as e:
+        logger.error(f"[Supabase] Erro ao buscar cotações proposta_enviada: {e}")
+        return []
+
+
+def get_last_message(cotacao_id: str) -> Optional[dict]:
+    """Retorna a mensagem mais recente de uma cotação."""
+    supabase = get_supabase()
+    try:
+        res = supabase.table("mensagens").select("*").eq(
+            "cotacao_id", cotacao_id
+        ).order("created_at", desc=True).limit(1).execute()
+        return res.data[0] if res.data else None
+    except Exception as e:
+        logger.error(f"[Supabase] Erro ao buscar última mensagem: {e}")
+        return None
+
+
+def get_followup_count(cotacao_id: str) -> int:
+    """Conta quantos follow-ups já foram enviados para uma cotação."""
+    supabase = get_supabase()
+    try:
+        res = supabase.table("mensagens").select("id").eq(
+            "cotacao_id", cotacao_id
+        ).eq("origem_mensagem", "followup").execute()
+        return len(res.data or [])
+    except Exception as e:
+        logger.error(f"[Supabase] Erro ao contar follow-ups: {e}")
+        return 0
+
+
+def get_last_followup_time(cotacao_id: str) -> Optional[str]:
+    """Retorna o timestamp do último follow-up enviado."""
+    supabase = get_supabase()
+    try:
+        res = supabase.table("mensagens").select("created_at").eq(
+            "cotacao_id", cotacao_id
+        ).eq("origem_mensagem", "followup").order(
+            "created_at", desc=True
+        ).limit(1).execute()
+        return res.data[0]["created_at"] if res.data else None
+    except Exception as e:
+        logger.error(f"[Supabase] Erro ao buscar último follow-up: {e}")
+        return None
+
+
 # ── WEBHOOK LOGS ──────────────────────────────────────────────────────────────
 
 def save_webhook_log(origem: str, payload: dict) -> dict:
